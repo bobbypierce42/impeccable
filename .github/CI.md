@@ -8,8 +8,9 @@ MSVC builds, and signing retain GitHub-hosted Windows runners.
 The Linux runner needs Git, curl, an available C/C++ linker, and Chromium's
 system libraries for the Puppeteer/Playwright suites. Workflows install Node,
 Bun, and Rust explicitly. Linux release builds also use the existing musl-tools
-installation and Docker-backed `cross` build. Publication and issue triage
-install the GitHub CLI through the existing sudo/apt setup when needed.
+installation and Docker-backed `cross` build. The sheriff jobs install a
+checksum-verified GitHub CLI into a temporary directory when absent. Publication
+retains its existing sudo/apt GitHub CLI setup.
 
 The Mac needs Xcode command-line tools. On Apple Silicon, Rosetta 2 is required
 to execute the Intel release binary's smoke test; the workflow checks this
