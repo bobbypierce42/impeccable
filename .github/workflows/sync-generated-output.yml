@@ -49,7 +49,7 @@ env:
 
 jobs:
   sync:
-    runs-on: [self-hosted, kalana-ci]
+    runs-on: kalana-ci
     timeout-minutes: 15
     steps:
       - name: Checkout repository

@@ -24,8 +24,8 @@ jobs:
           - { runner: [self-hosted, kalana-macos-ci], os: macos-14,       target: aarch64-apple-darwin,       short: darwin-arm64 }
           # The Apple Silicon runner needs Rosetta 2 for the Intel binary smoke test.
           - { runner: [self-hosted, kalana-macos-ci], os: macos-14,       target: x86_64-apple-darwin,        short: darwin-x64 }
-          - { runner: [self-hosted, kalana-ci], os: ubuntu-latest,  target: x86_64-unknown-linux-musl,  short: linux-x64 }
-          - { runner: [self-hosted, kalana-ci], os: ubuntu-latest,  target: aarch64-unknown-linux-musl, short: linux-arm64, cross: true }
+          - { runner: kalana-ci, os: ubuntu-latest,  target: x86_64-unknown-linux-musl,  short: linux-x64 }
+          - { runner: kalana-ci, os: ubuntu-latest,  target: aarch64-unknown-linux-musl, short: linux-arm64, cross: true }
           - { runner: windows-latest, os: windows-latest, target: x86_64-pc-windows-msvc,     short: windows-x64 }
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
@@ -143,7 +143,7 @@ jobs:
           if-no-files-found: error
   publish:
     needs: [build, sign-windows]
-    runs-on: [self-hosted, kalana-ci]
+    runs-on: kalana-ci
     timeout-minutes: 15
     permissions:
       contents: write

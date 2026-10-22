@@ -29,7 +29,7 @@ concurrency:
 jobs:
   changes:
     if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: [self-hosted, kalana-ci]
+    runs-on: kalana-ci
     timeout-minutes: 45
     outputs:
       core: ${{ steps.plan.outputs.core }}
@@ -63,7 +63,7 @@ jobs:
   test-matrix:
     name: test (Node ${{ matrix.node-version }})
     if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: [self-hosted, kalana-ci]
+    runs-on: kalana-ci
     timeout-minutes: 45
     needs: changes
     strategy:
@@ -175,7 +175,7 @@ jobs:
   # The Rust workspace: the engine binary, the rule core, and every crate
   # behind them. Everything builds from source with no downloads.
   rust:
-    runs-on: [self-hosted, kalana-ci]
+    runs-on: kalana-ci
     timeout-minutes: 45
     needs: changes
     if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (needs.changes.outputs.rust == 'true')
@@ -246,7 +246,7 @@ jobs:
   # runs on developer laptops: tests/oracle.test.mjs skips cleanly when no
   # binary is present, so the default suite is silent about it on CI.
   oracle:
-    runs-on: [self-hosted, kalana-ci]
+    runs-on: kalana-ci
     timeout-minutes: 45
     needs: changes
     if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (needs.changes.outputs.oracle == 'true' || needs.changes.outputs.rust == 'true')
@@ -304,7 +304,7 @@ jobs:
   # release.mjs hard-fails `release:skill`/`release:cli` on the same check.
   engine-release-ready:
     if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: [self-hosted, kalana-ci]
+    runs-on: kalana-ci
     timeout-minutes: 45
     steps:
       - name: Checkout repository
@@ -326,7 +326,7 @@ jobs:
           echo "::error title=Engine release not ready::The engine release for v$(cat ENGINE_VERSION) is not fully published (engine-v$(cat ENGINE_VERSION) release assets and/or the @impeccable/cli-<os>-<arch> npm platform packages). Publish the engine (bun run release:engine) and the platform packages (bun run release:platform-packages) before bumping ENGINE_VERSION on main or releasing the skill/CLI."
 
   test:
-    runs-on: [self-hosted, kalana-ci]
+    runs-on: kalana-ci
     timeout-minutes: 45
     needs: test-matrix
     if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (always())
@@ -340,7 +340,7 @@ jobs:
           echo "test matrix passed"
 
   cli-remote-e2e:
-    runs-on: [self-hosted, kalana-ci]
+    runs-on: kalana-ci
     timeout-minutes: 45
     needs: changes
     if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (needs.changes.outputs.cli_remote_e2e == 'true')
@@ -388,7 +388,7 @@ jobs:
 
   live-e2e-smoke:
     name: live-e2e smoke (${{ matrix.group }})
-    runs-on: [self-hosted, kalana-ci]
+    runs-on: kalana-ci
     needs: changes
     if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (needs.changes.outputs.live_e2e == 'true' && github.event_name != 'workflow_dispatch' && github.event_name != 'schedule')
     timeout-minutes: 15
@@ -473,7 +473,7 @@ jobs:
 
   live-e2e-full:
     name: live-e2e full (${{ matrix.group }})
-    runs-on: [self-hosted, kalana-ci]
+    runs-on: kalana-ci
     needs: changes
     if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (needs.changes.outputs.live_e2e == 'true' && (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'))
     timeout-minutes: 25
@@ -562,7 +562,7 @@ jobs:
           if-no-files-found: ignore
 
   live-e2e-accept-cleanup:
-    runs-on: [self-hosted, kalana-ci]
+    runs-on: kalana-ci
     needs: changes
     if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (needs.changes.outputs.live_e2e_accept_cleanup == 'true')
     timeout-minutes: 15
@@ -646,7 +646,7 @@ jobs:
           bun run test:live-e2e-accept-cleanup
 
   live-svelte-adapter-deepseek:
-    runs-on: [self-hosted, kalana-ci]
+    runs-on: kalana-ci
     needs: changes
     if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (needs.changes.outputs.live_svelte_adapter_deepseek == 'true')
     timeout-minutes: 25
@@ -723,7 +723,7 @@ jobs:
         run: bun run test:live-svelte-adapter-deepseek
 
   skill-behavior:
-    runs-on: [self-hosted, kalana-ci]
+    runs-on: kalana-ci
     timeout-minutes: 45
     needs: changes
     if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (needs.changes.outputs.skill_behavior == 'true' && github.event_name != 'pull_request')
@@ -757,7 +757,7 @@ jobs:
   skill-workflow:
     # Expensive, manually opted-in completion diagnostics. This does not
     # replace the multi-family skill-behavior protocol suite above.
-    runs-on: [self-hosted, kalana-ci]
+    runs-on: kalana-ci
     if: github.event_name == 'workflow_dispatch' && inputs.skill_workflow
     timeout-minutes: 70
     env:

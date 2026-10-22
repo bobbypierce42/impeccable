@@ -28,7 +28,7 @@ concurrency:
 jobs:
   issue-inbox:
     if: github.event_name == 'issues'
-    runs-on: [self-hosted, kalana-ci]
+    runs-on: kalana-ci
     timeout-minutes: 15
     steps:
       - name: Install runner command-line dependencies
@@ -52,7 +52,7 @@ jobs:
 
   sheriff:
     if: github.event_name != 'issues'
-    runs-on: [self-hosted, kalana-ci]
+    runs-on: kalana-ci
     timeout-minutes: 15
     steps:
       - name: Checkout repository

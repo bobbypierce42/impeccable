@@ -1,7 +1,7 @@
 # CI runner contract
 
 General CI, browser suites, generated-output sync, maintenance, and release
-publication use the `self-hosted` and `kalana-ci` labels. Apple release builds
+publication use the `kalana-ci` scale-set label. Apple release builds
 use `self-hosted` and `kalana-macos-ci`. Native Windows Rust/launcher checks,
 MSVC builds, and signing retain GitHub-hosted Windows runners.
 
@@ -16,8 +16,9 @@ to execute the Intel release binary's smoke test; the workflow checks this
 prerequisite and fails with an actionable message. CI does not install Rosetta
 or change the Mac's system settings.
 
-Runner names alone do not select runners. Both runner labels must be registered
-and the runner must be online and accessible to this repository. External-fork
+Runner names alone do not select runners. The selected runner label must be
+registered and online and accessible to this repository. The Linux scale set
+uses only `kalana-ci`; it does not require the default `self-hosted` label. External-fork
 pull requests do not execute code on the persistent self-hosted machines.
 
 The main CI workflow must be enabled in the fork's Actions settings. Provider
