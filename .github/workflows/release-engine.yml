@@ -21,13 +21,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: macos-14,       target: aarch64-apple-darwin,       short: darwin-arm64 }
-          # Run the Intel binary smoke test on an Intel host.
-          - { os: macos-14,       target: x86_64-apple-darwin,        short: darwin-x64 }
-          - { os: ubuntu-latest,  target: x86_64-unknown-linux-musl,  short: linux-x64 }
-          - { os: ubuntu-latest,  target: aarch64-unknown-linux-musl, short: linux-arm64, cross: true }
-          - { os: windows-latest, target: x86_64-pc-windows-msvc,     short: windows-x64 }
-    runs-on: ${{ matrix.target == 'x86_64-apple-darwin' && 'macos-15-intel' || matrix.os == 'ubuntu-latest' && 'kalana-ci' || matrix.os == 'macos-14' && (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'macos-26' || 'kalana-macos-ci') || matrix.os }}
+          - { runner: [self-hosted, kalana-macos-ci], os: macos-14,       target: aarch64-apple-darwin,       short: darwin-arm64 }
+          # The Apple Silicon runner needs Rosetta 2 for the Intel binary smoke test.
+          - { runner: [self-hosted, kalana-macos-ci], os: macos-14,       target: x86_64-apple-darwin,        short: darwin-x64 }
+          - { runner: [self-hosted, kalana-ci], os: ubuntu-latest,  target: x86_64-unknown-linux-musl,  short: linux-x64 }
+          - { runner: [self-hosted, kalana-ci], os: ubuntu-latest,  target: aarch64-unknown-linux-musl, short: linux-arm64, cross: true }
+          - { runner: windows-latest, os: windows-latest, target: x86_64-pc-windows-msvc,     short: windows-x64 }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
     steps:
       - name: Limit self-hosted compilation parallelism
         if: runner.environment == 'self-hosted'
@@ -65,7 +66,12 @@ jobs:
         run: cargo install cross --locked
       - name: Build
         shell: bash
-        run: ${{ matrix.cross && 'cross' || 'cargo' }} build --release -p impeccable --target ${{ matrix.target }}
+        run: ${{ matrix.cross && 'cross' || 'cargo' }} build --locked --release -p impeccable --target ${{ matrix.target }}
+      - name: Check Intel execution support
+        if: matrix.target == 'x86_64-apple-darwin' && runner.arch == 'ARM64'
+        shell: bash
+        run: |
+          arch -x86_64 /usr/bin/true || { echo "::error::Install Rosetta 2 on kalana-macos-ci to run the Intel binary smoke test."; exit 1; }
       - name: Smoke the binary
         if: ${{ !matrix.cross }}
         shell: bash
@@ -137,7 +143,8 @@ jobs:
           if-no-files-found: error
   publish:
     needs: [build, sign-windows]
-    runs-on: kalana-ci
+    runs-on: [self-hosted, kalana-ci]
+    timeout-minutes: 15
     permissions:
       contents: write
     steps:

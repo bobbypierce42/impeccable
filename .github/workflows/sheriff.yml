@@ -28,7 +28,8 @@ concurrency:
 jobs:
   issue-inbox:
     if: github.event_name == 'issues'
-    runs-on: kalana-ci
+    runs-on: [self-hosted, kalana-ci]
+    timeout-minutes: 15
     steps:
       - name: Install runner command-line dependencies
         if: runner.os == 'Linux' && runner.environment == 'self-hosted'
@@ -51,7 +52,8 @@ jobs:
 
   sheriff:
     if: github.event_name != 'issues'
-    runs-on: kalana-ci
+    runs-on: [self-hosted, kalana-ci]
+    timeout-minutes: 15
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
