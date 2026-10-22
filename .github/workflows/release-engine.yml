@@ -22,14 +22,25 @@ jobs:
       matrix:
         include:
           - { os: macos-14,       target: aarch64-apple-darwin,       short: darwin-arm64 }
-          # No Intel runner: GitHub retired macos-13. Apple's toolchain builds
-          # x86_64 on an arm64 host natively once the target is installed.
+          # Run the Intel binary smoke test on an Intel host.
           - { os: macos-14,       target: x86_64-apple-darwin,        short: darwin-x64 }
           - { os: ubuntu-latest,  target: x86_64-unknown-linux-musl,  short: linux-x64 }
           - { os: ubuntu-latest,  target: aarch64-unknown-linux-musl, short: linux-arm64, cross: true }
           - { os: windows-latest, target: x86_64-pc-windows-msvc,     short: windows-x64 }
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.target == 'x86_64-apple-darwin' && 'macos-15-intel' || matrix.os == 'ubuntu-latest' && 'kalana-ci' || matrix.os == 'macos-14' && 'kalana-macos-ci' || matrix.os }}
     steps:
+      - name: Limit self-hosted compilation parallelism
+        if: runner.environment == 'self-hosted'
+        shell: bash
+        run: |-
+          echo "CARGO_BUILD_JOBS=2" >> "$GITHUB_ENV"
+          echo "RUST_TEST_THREADS=2" >> "$GITHUB_ENV"
+      - name: Prepare a private home for the Mac job
+        if: runner.os == 'macOS' && runner.environment == 'self-hosted'
+        shell: bash
+        run: |-
+          mkdir -p "$RUNNER_TEMP/ci-home"
+          echo "HOME=$RUNNER_TEMP/ci-home" >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Check the tag matches ENGINE_VERSION
         shell: bash
@@ -39,6 +50,12 @@ jobs:
           [ "$GITHUB_REF_NAME" = "$want" ] || { echo "tag $GITHUB_REF_NAME != $want"; exit 1; }
       # rust-toolchain.toml names the channel; `rustup show` installs it.
       # Never override the toolchain here.
+      - name: Install Rust on the self-hosted runner
+        if: runner.environment == 'self-hosted'
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
       - name: Install the pinned toolchain
         shell: bash
         run: rustup show && rustup target add ${{ matrix.target }}
@@ -120,10 +137,21 @@ jobs:
           if-no-files-found: error
   publish:
     needs: [build, sign-windows]
-    runs-on: ubuntu-latest
+    runs-on: kalana-ci
     permissions:
       contents: write
     steps:
+      - name: Install runner command-line dependencies
+        if: runner.os == 'Linux' && runner.environment == 'self-hosted'
+        shell: bash
+        run: |-
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gh
+      - name: Set up Node.js for runner scripts
+        if: runner.environment == 'self-hosted'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '24'
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: impeccable-*

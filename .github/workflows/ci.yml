@@ -28,7 +28,7 @@ concurrency:
 
 jobs:
   changes:
-    runs-on: ubuntu-latest
+    runs-on: kalana-ci
     outputs:
       core: ${{ steps.plan.outputs.core }}
       rust: ${{ steps.plan.outputs.rust }}
@@ -164,15 +164,27 @@ jobs:
   # The Rust workspace: the engine binary, the rule core, and every crate
   # behind them. Everything builds from source with no downloads.
   rust:
-    runs-on: ubuntu-latest
+    runs-on: kalana-ci
     needs: changes
     if: needs.changes.outputs.rust == 'true'
     steps:
+      - name: Limit self-hosted compilation parallelism
+        if: runner.environment == 'self-hosted'
+        shell: bash
+        run: |-
+          echo "CARGO_BUILD_JOBS=2" >> "$GITHUB_ENV"
+          echo "RUST_TEST_THREADS=2" >> "$GITHUB_ENV"
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # rust-toolchain.toml names the channel; `rustup show` installs it.
       # Never override the toolchain here.
+      - name: Install Rust on the self-hosted runner
+        if: runner.environment == 'self-hosted'
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
       - name: Install the pinned toolchain
         run: rustup show
 
@@ -220,10 +232,16 @@ jobs:
   # runs on developer laptops: tests/oracle.test.mjs skips cleanly when no
   # binary is present, so the default suite is silent about it on CI.
   oracle:
-    runs-on: ubuntu-latest
+    runs-on: kalana-ci
     needs: changes
     if: needs.changes.outputs.oracle == 'true' || needs.changes.outputs.rust == 'true'
     steps:
+      - name: Limit self-hosted compilation parallelism
+        if: runner.environment == 'self-hosted'
+        shell: bash
+        run: |-
+          echo "CARGO_BUILD_JOBS=2" >> "$GITHUB_ENV"
+          echo "RUST_TEST_THREADS=2" >> "$GITHUB_ENV"
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -240,6 +258,12 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Install Rust on the self-hosted runner
+        if: runner.environment == 'self-hosted'
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
       - name: Install the pinned toolchain
         run: rustup show
 
@@ -264,7 +288,7 @@ jobs:
   # pin, or the launcher, the npm shim and `impeccable install` dead-end.
   # release.mjs hard-fails `release:skill`/`release:cli` on the same check.
   engine-release-ready:
-    runs-on: ubuntu-latest
+    runs-on: kalana-ci
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -285,7 +309,7 @@ jobs:
           echo "::error title=Engine release not ready::The engine release for v$(cat ENGINE_VERSION) is not fully published (engine-v$(cat ENGINE_VERSION) release assets and/or the @impeccable/cli-<os>-<arch> npm platform packages). Publish the engine (bun run release:engine) and the platform packages (bun run release:platform-packages) before bumping ENGINE_VERSION on main or releasing the skill/CLI."
 
   test:
-    runs-on: ubuntu-latest
+    runs-on: kalana-ci
     needs: test-matrix
     if: always()
     steps:
@@ -298,10 +322,16 @@ jobs:
           echo "test matrix passed"
 
   cli-remote-e2e:
-    runs-on: ubuntu-latest
+    runs-on: kalana-ci
     needs: changes
     if: needs.changes.outputs.cli_remote_e2e == 'true'
     steps:
+      - name: Limit self-hosted compilation parallelism
+        if: runner.environment == 'self-hosted'
+        shell: bash
+        run: |-
+          echo "CARGO_BUILD_JOBS=2" >> "$GITHUB_ENV"
+          echo "RUST_TEST_THREADS=2" >> "$GITHUB_ENV"
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -320,6 +350,12 @@ jobs:
 
       # The live verbs are the engine binary; build it from this checkout so the
       # suite tests the branch, not the last published release.
+      - name: Install Rust on the self-hosted runner
+        if: runner.environment == 'self-hosted'
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
       - name: Install the pinned toolchain
         run: rustup show
 
@@ -646,7 +682,7 @@ jobs:
         run: bun run test:live-svelte-adapter-deepseek
 
   skill-behavior:
-    runs-on: ubuntu-latest
+    runs-on: kalana-ci
     needs: changes
     if: needs.changes.outputs.skill_behavior == 'true' && github.event_name != 'pull_request'
     env:
