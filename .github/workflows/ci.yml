@@ -26,6 +26,14 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'schedule' && 'nightly' || github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+env:
+  CARGO_BUILD_JOBS: '1'
+  CARGO_INCREMENTAL: '0'
+  CARGO_PROFILE_DEV_DEBUG: '0'
+  CARGO_PROFILE_TEST_DEBUG: '0'
+  RUST_TEST_THREADS: '1'
+  RAYON_NUM_THREADS: '1'
+
 jobs:
   changes:
     if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
@@ -67,6 +75,7 @@ jobs:
     timeout-minutes: 45
     needs: changes
     strategy:
+      max-parallel: 1
       fail-fast: false
       matrix:
         node-version: [22.18.0, 24]
@@ -184,8 +193,8 @@ jobs:
         if: runner.environment == 'self-hosted'
         shell: bash
         run: |-
-          echo "CARGO_BUILD_JOBS=2" >> "$GITHUB_ENV"
-          echo "RUST_TEST_THREADS=2" >> "$GITHUB_ENV"
+          echo "CARGO_BUILD_JOBS=1" >> "$GITHUB_ENV"
+          echo "RUST_TEST_THREADS=1" >> "$GITHUB_ENV"
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -255,8 +264,8 @@ jobs:
         if: runner.environment == 'self-hosted'
         shell: bash
         run: |-
-          echo "CARGO_BUILD_JOBS=2" >> "$GITHUB_ENV"
-          echo "RUST_TEST_THREADS=2" >> "$GITHUB_ENV"
+          echo "CARGO_BUILD_JOBS=1" >> "$GITHUB_ENV"
+          echo "RUST_TEST_THREADS=1" >> "$GITHUB_ENV"
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -349,8 +358,8 @@ jobs:
         if: runner.environment == 'self-hosted'
         shell: bash
         run: |-
-          echo "CARGO_BUILD_JOBS=2" >> "$GITHUB_ENV"
-          echo "RUST_TEST_THREADS=2" >> "$GITHUB_ENV"
+          echo "CARGO_BUILD_JOBS=1" >> "$GITHUB_ENV"
+          echo "RUST_TEST_THREADS=1" >> "$GITHUB_ENV"
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -393,6 +402,7 @@ jobs:
     if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (needs.changes.outputs.live_e2e == 'true' && github.event_name != 'workflow_dispatch' && github.event_name != 'schedule')
     timeout-minutes: 15
     strategy:
+      max-parallel: 1
       fail-fast: true
       matrix:
         include:
@@ -478,6 +488,7 @@ jobs:
     if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (needs.changes.outputs.live_e2e == 'true' && (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'))
     timeout-minutes: 25
     strategy:
+      max-parallel: 1
       fail-fast: true
       matrix:
         include:
