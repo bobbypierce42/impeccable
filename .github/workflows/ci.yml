@@ -435,8 +435,8 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Install Playwright Chromium
-        run: npx playwright install chromium
+      - name: Install Playwright Chromium and system dependencies
+        run: npx playwright install --with-deps chromium
 
       # The live verbs are the engine binary; build it from this checkout so the
       # suite tests the branch, not the last published release.
@@ -526,8 +526,8 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Install Playwright Chromium
-        run: npx playwright install chromium
+      - name: Install Playwright Chromium and system dependencies
+        run: npx playwright install --with-deps chromium
 
       # The live verbs are the engine binary; build it from this checkout so the
       # suite tests the branch, not the last published release.
@@ -612,9 +612,9 @@ jobs:
         if: ${{ env.ANTHROPIC_API_KEY != '' || env.DEEPSEEK_API_KEY != '' }}
         run: bun install --frozen-lockfile
 
-      - name: Install Playwright Chromium
+      - name: Install Playwright Chromium and system dependencies
         if: ${{ env.ANTHROPIC_API_KEY != '' || env.DEEPSEEK_API_KEY != '' }}
-        run: npx playwright install chromium
+        run: npx playwright install --with-deps chromium
 
       # The live verbs are the engine binary; build it from this checkout so the
       # suite tests the branch, not the last published release.
@@ -695,9 +695,9 @@ jobs:
         if: ${{ env.DEEPSEEK_API_KEY != '' }}
         run: bun install --frozen-lockfile
 
-      - name: Install Playwright Chromium
+      - name: Install Playwright Chromium and system dependencies
         if: ${{ env.DEEPSEEK_API_KEY != '' }}
-        run: npx playwright install chromium
+        run: npx playwright install --with-deps chromium
 
       # The live verbs are the engine binary; build it from this checkout so the
       # suite tests the branch, not the last published release.

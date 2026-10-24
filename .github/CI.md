@@ -5,9 +5,11 @@ publication use the `kalana-ci` scale-set label. Apple release builds
 use `self-hosted` and `kalana-macos-ci`. Native Windows Rust/launcher checks,
 MSVC builds, and signing retain GitHub-hosted Windows runners.
 
-The Linux runner needs Git, curl, an available C/C++ linker, and Chromium's
-system libraries for the Puppeteer/Playwright suites. Workflows install Node,
-Bun, and Rust explicitly. Linux release builds also use the existing musl-tools
+The Linux runner needs Git, curl, and an available C/C++ linker. Playwright E2E
+jobs install Chromium and its Linux system packages with `--with-deps` on every
+run, including browser-cache hits; the runner must permit that package setup.
+Puppeteer suites still need their Chrome runtime libraries. Workflows install
+Node, Bun, and Rust explicitly. Linux release builds also use the existing musl-tools
 installation and Docker-backed `cross` build. The sheriff jobs install a
 checksum-verified GitHub CLI into a temporary directory when absent. Publication
 retains its existing sudo/apt GitHub CLI setup.
