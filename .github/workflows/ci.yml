@@ -28,10 +28,13 @@ concurrency:
 
 jobs:
   changes:
-    runs-on: ubuntu-latest
+    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: kalana-ci
+    timeout-minutes: 45
     outputs:
       core: ${{ steps.plan.outputs.core }}
       rust: ${{ steps.plan.outputs.rust }}
+      oracle: ${{ steps.plan.outputs.oracle }}
       detector: ${{ steps.plan.outputs.detector }}
       live: ${{ steps.plan.outputs.live }}
       framework: ${{ steps.plan.outputs.framework }}
@@ -59,7 +62,9 @@ jobs:
 
   test-matrix:
     name: test (Node ${{ matrix.node-version }})
-    runs-on: ubuntu-latest
+    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: kalana-ci
+    timeout-minutes: 45
     needs: changes
     strategy:
       fail-fast: false
@@ -77,10 +82,10 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: latest
+          bun-version: 1.4.4
 
       - name: Install dependencies
-        run: bun install
+        run: bun install --frozen-lockfile
 
       - name: Run core tests
         run: bun run test:core
@@ -110,6 +115,12 @@ jobs:
 
       # `bun run build:extension` runs `cargo xtask bundle`: the rule core
       # compiled to wasm plus the page JS in browser-bundle/.
+      - name: Install Rust on the self-hosted runner
+        if: needs.changes.outputs.detector == 'true'
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
       - name: Install the pinned toolchain
         if: needs.changes.outputs.detector == 'true'
         run: rustup show && rustup target add wasm32-unknown-unknown
@@ -164,31 +175,45 @@ jobs:
   # The Rust workspace: the engine binary, the rule core, and every crate
   # behind them. Everything builds from source with no downloads.
   rust:
-    runs-on: ubuntu-latest
+    runs-on: kalana-ci
+    timeout-minutes: 45
     needs: changes
-    if: needs.changes.outputs.rust == 'true'
+    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (needs.changes.outputs.rust == 'true')
     steps:
+      - name: Limit self-hosted compilation parallelism
+        if: runner.environment == 'self-hosted'
+        shell: bash
+        run: |-
+          echo "CARGO_BUILD_JOBS=2" >> "$GITHUB_ENV"
+          echo "RUST_TEST_THREADS=2" >> "$GITHUB_ENV"
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # rust-toolchain.toml names the channel; `rustup show` installs it.
       # Never override the toolchain here.
+      - name: Install Rust on the self-hosted runner
+        if: runner.environment == 'self-hosted'
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
       - name: Install the pinned toolchain
         run: rustup show
 
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
       - name: Build
-        run: cargo build --workspace --all-targets
+        run: cargo build --locked --workspace --all-targets
 
       - name: Test
-        run: cargo test --workspace
+        run: cargo test --locked --workspace
 
   # The engine ships a windows-x64 binary (release-engine.yml), so the
   # workspace has to build and pass its own tests there. Tests that need a
   # browser or the oracle skip when those are absent.
   rust-windows:
     runs-on: windows-latest
+    timeout-minutes: 45
     needs: changes
     if: needs.changes.outputs.rust == 'true'
     steps:
@@ -197,11 +222,12 @@ jobs:
       - name: Install the pinned toolchain
         run: rustup show
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-      - run: cargo build --workspace --all-targets
-      - run: cargo test --workspace --no-fail-fast
+      - run: cargo build --locked --workspace --all-targets
+      - run: cargo test --locked --workspace --no-fail-fast
 
   launcher-windows:
     runs-on: windows-latest
+    timeout-minutes: 45
     needs: changes
     if: needs.changes.outputs.core == 'true'
     steps:
@@ -220,10 +246,17 @@ jobs:
   # runs on developer laptops: tests/oracle.test.mjs skips cleanly when no
   # binary is present, so the default suite is silent about it on CI.
   oracle:
-    runs-on: ubuntu-latest
+    runs-on: kalana-ci
+    timeout-minutes: 45
     needs: changes
-    if: needs.changes.outputs.oracle == 'true' || needs.changes.outputs.rust == 'true'
+    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (needs.changes.outputs.oracle == 'true' || needs.changes.outputs.rust == 'true')
     steps:
+      - name: Limit self-hosted compilation parallelism
+        if: runner.environment == 'self-hosted'
+        shell: bash
+        run: |-
+          echo "CARGO_BUILD_JOBS=2" >> "$GITHUB_ENV"
+          echo "RUST_TEST_THREADS=2" >> "$GITHUB_ENV"
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -235,18 +268,24 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: latest
+          bun-version: 1.4.4
 
       - name: Install dependencies
-        run: bun install
+        run: bun install --frozen-lockfile
 
+      - name: Install Rust on the self-hosted runner
+        if: runner.environment == 'self-hosted'
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
       - name: Install the pinned toolchain
         run: rustup show
 
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
       - name: Build the engine from source
-        run: cargo build --release -p impeccable
+        run: cargo build --locked --release -p impeccable
 
       - name: Replay oracle goldens
         env:
@@ -264,7 +303,9 @@ jobs:
   # pin, or the launcher, the npm shim and `impeccable install` dead-end.
   # release.mjs hard-fails `release:skill`/`release:cli` on the same check.
   engine-release-ready:
-    runs-on: ubuntu-latest
+    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: kalana-ci
+    timeout-minutes: 45
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -285,9 +326,10 @@ jobs:
           echo "::error title=Engine release not ready::The engine release for v$(cat ENGINE_VERSION) is not fully published (engine-v$(cat ENGINE_VERSION) release assets and/or the @impeccable/cli-<os>-<arch> npm platform packages). Publish the engine (bun run release:engine) and the platform packages (bun run release:platform-packages) before bumping ENGINE_VERSION on main or releasing the skill/CLI."
 
   test:
-    runs-on: ubuntu-latest
+    runs-on: kalana-ci
+    timeout-minutes: 45
     needs: test-matrix
-    if: always()
+    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (always())
     steps:
       - name: Verify Node test matrix
         run: |
@@ -298,10 +340,17 @@ jobs:
           echo "test matrix passed"
 
   cli-remote-e2e:
-    runs-on: ubuntu-latest
+    runs-on: kalana-ci
+    timeout-minutes: 45
     needs: changes
-    if: needs.changes.outputs.cli_remote_e2e == 'true'
+    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (needs.changes.outputs.cli_remote_e2e == 'true')
     steps:
+      - name: Limit self-hosted compilation parallelism
+        if: runner.environment == 'self-hosted'
+        shell: bash
+        run: |-
+          echo "CARGO_BUILD_JOBS=2" >> "$GITHUB_ENV"
+          echo "RUST_TEST_THREADS=2" >> "$GITHUB_ENV"
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -313,29 +362,35 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: latest
+          bun-version: 1.4.4
 
       - name: Install dependencies
-        run: bun install
+        run: bun install --frozen-lockfile
 
       # The live verbs are the engine binary; build it from this checkout so the
       # suite tests the branch, not the last published release.
+      - name: Install Rust on the self-hosted runner
+        if: runner.environment == 'self-hosted'
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
       - name: Install the pinned toolchain
         run: rustup show
 
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
       - name: Build the engine
-        run: cargo build --release -p impeccable
+        run: cargo build --locked --release -p impeccable
 
       - name: Run remote CLI E2E smoke
         run: bun run test:cli-remote-e2e
 
   live-e2e-smoke:
     name: live-e2e smoke (${{ matrix.group }})
-    runs-on: ubuntu-latest
+    runs-on: kalana-ci
     needs: changes
-    if: needs.changes.outputs.live_e2e == 'true' && github.event_name != 'workflow_dispatch' && github.event_name != 'schedule'
+    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (needs.changes.outputs.live_e2e == 'true' && github.event_name != 'workflow_dispatch' && github.event_name != 'schedule')
     timeout-minutes: 15
     strategy:
       fail-fast: true
@@ -359,7 +414,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: latest
+          bun-version: 1.4.4
 
       - name: Cache fixture npm downloads
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -378,20 +433,25 @@ jobs:
             ${{ runner.os }}-playwright-chromium-
 
       - name: Install dependencies
-        run: bun install
+        run: bun install --frozen-lockfile
 
-      - name: Install Playwright Chromium
-        run: npx playwright install chromium
+      - name: Install Playwright Chromium and system dependencies
+        run: npx playwright install --with-deps chromium
 
       # The live verbs are the engine binary; build it from this checkout so the
       # suite tests the branch, not the last published release.
+      - name: Install Rust on the self-hosted runner
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
       - name: Install the pinned toolchain
         run: rustup show
 
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
       - name: Build the engine
-        run: cargo build --release -p impeccable
+        run: cargo build --locked --release -p impeccable
 
       - name: Run live E2E tests
         run: bun run test:live-e2e
@@ -413,9 +473,9 @@ jobs:
 
   live-e2e-full:
     name: live-e2e full (${{ matrix.group }})
-    runs-on: ubuntu-latest
+    runs-on: kalana-ci
     needs: changes
-    if: needs.changes.outputs.live_e2e == 'true' && (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')
+    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (needs.changes.outputs.live_e2e == 'true' && (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'))
     timeout-minutes: 25
     strategy:
       fail-fast: true
@@ -445,7 +505,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: latest
+          bun-version: 1.4.4
 
       - name: Cache fixture npm downloads
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -464,20 +524,25 @@ jobs:
             ${{ runner.os }}-playwright-chromium-
 
       - name: Install dependencies
-        run: bun install
+        run: bun install --frozen-lockfile
 
-      - name: Install Playwright Chromium
-        run: npx playwright install chromium
+      - name: Install Playwright Chromium and system dependencies
+        run: npx playwright install --with-deps chromium
 
       # The live verbs are the engine binary; build it from this checkout so the
       # suite tests the branch, not the last published release.
+      - name: Install Rust on the self-hosted runner
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
       - name: Install the pinned toolchain
         run: rustup show
 
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
       - name: Build the engine
-        run: cargo build --release -p impeccable
+        run: cargo build --locked --release -p impeccable
 
       - name: Run live E2E tests
         run: bun run test:live-e2e
@@ -497,9 +562,9 @@ jobs:
           if-no-files-found: ignore
 
   live-e2e-accept-cleanup:
-    runs-on: ubuntu-latest
+    runs-on: kalana-ci
     needs: changes
-    if: needs.changes.outputs.live_e2e_accept_cleanup == 'true'
+    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (needs.changes.outputs.live_e2e_accept_cleanup == 'true')
     timeout-minutes: 15
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -523,7 +588,7 @@ jobs:
         if: ${{ env.ANTHROPIC_API_KEY != '' || env.DEEPSEEK_API_KEY != '' }}
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: latest
+          bun-version: 1.4.4
 
       - name: Cache fixture npm downloads
         if: ${{ env.ANTHROPIC_API_KEY != '' || env.DEEPSEEK_API_KEY != '' }}
@@ -545,14 +610,20 @@ jobs:
 
       - name: Install dependencies
         if: ${{ env.ANTHROPIC_API_KEY != '' || env.DEEPSEEK_API_KEY != '' }}
-        run: bun install
+        run: bun install --frozen-lockfile
 
-      - name: Install Playwright Chromium
+      - name: Install Playwright Chromium and system dependencies
         if: ${{ env.ANTHROPIC_API_KEY != '' || env.DEEPSEEK_API_KEY != '' }}
-        run: npx playwright install chromium
+        run: npx playwright install --with-deps chromium
 
       # The live verbs are the engine binary; build it from this checkout so the
       # suite tests the branch, not the last published release.
+      - name: Install Rust on the self-hosted runner
+        if: ${{ env.ANTHROPIC_API_KEY != '' || env.DEEPSEEK_API_KEY != '' }}
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
       - name: Install the pinned toolchain
         if: ${{ env.ANTHROPIC_API_KEY != '' || env.DEEPSEEK_API_KEY != '' }}
         run: rustup show
@@ -562,7 +633,7 @@ jobs:
 
       - name: Build the engine
         if: ${{ env.ANTHROPIC_API_KEY != '' || env.DEEPSEEK_API_KEY != '' }}
-        run: cargo build --release -p impeccable
+        run: cargo build --locked --release -p impeccable
 
       - name: Run accept cleanup regression
         if: ${{ env.ANTHROPIC_API_KEY != '' || env.DEEPSEEK_API_KEY != '' }}
@@ -575,9 +646,9 @@ jobs:
           bun run test:live-e2e-accept-cleanup
 
   live-svelte-adapter-deepseek:
-    runs-on: ubuntu-latest
+    runs-on: kalana-ci
     needs: changes
-    if: needs.changes.outputs.live_svelte_adapter_deepseek == 'true'
+    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (needs.changes.outputs.live_svelte_adapter_deepseek == 'true')
     timeout-minutes: 25
     env:
       DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
@@ -600,7 +671,7 @@ jobs:
         if: ${{ env.DEEPSEEK_API_KEY != '' }}
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: latest
+          bun-version: 1.4.4
 
       - name: Cache fixture npm downloads
         if: ${{ env.DEEPSEEK_API_KEY != '' }}
@@ -622,14 +693,20 @@ jobs:
 
       - name: Install dependencies
         if: ${{ env.DEEPSEEK_API_KEY != '' }}
-        run: bun install
+        run: bun install --frozen-lockfile
 
-      - name: Install Playwright Chromium
+      - name: Install Playwright Chromium and system dependencies
         if: ${{ env.DEEPSEEK_API_KEY != '' }}
-        run: npx playwright install chromium
+        run: npx playwright install --with-deps chromium
 
       # The live verbs are the engine binary; build it from this checkout so the
       # suite tests the branch, not the last published release.
+      - name: Install Rust on the self-hosted runner
+        if: ${{ env.DEEPSEEK_API_KEY != '' }}
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
       - name: Install the pinned toolchain
         if: ${{ env.DEEPSEEK_API_KEY != '' }}
         run: rustup show
@@ -639,16 +716,17 @@ jobs:
 
       - name: Build the engine
         if: ${{ env.DEEPSEEK_API_KEY != '' }}
-        run: cargo build --release -p impeccable
+        run: cargo build --locked --release -p impeccable
 
       - name: Run Svelte adapter DeepSeek sweep
         if: ${{ env.DEEPSEEK_API_KEY != '' }}
         run: bun run test:live-svelte-adapter-deepseek
 
   skill-behavior:
-    runs-on: ubuntu-latest
+    runs-on: kalana-ci
+    timeout-minutes: 45
     needs: changes
-    if: needs.changes.outputs.skill_behavior == 'true' && github.event_name != 'pull_request'
+    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (needs.changes.outputs.skill_behavior == 'true' && github.event_name != 'pull_request')
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -665,10 +743,10 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: latest
+          bun-version: 1.4.4
 
       - name: Install dependencies
-        run: bun install
+        run: bun install --frozen-lockfile
 
       - name: Prepare engine for protocol tests
         run: bun run fetch:engine
@@ -679,7 +757,7 @@ jobs:
   skill-workflow:
     # Expensive, manually opted-in completion diagnostics. This does not
     # replace the multi-family skill-behavior protocol suite above.
-    runs-on: ubuntu-latest
+    runs-on: kalana-ci
     if: github.event_name == 'workflow_dispatch' && inputs.skill_workflow
     timeout-minutes: 70
     env:
@@ -695,7 +773,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: latest
+          bun-version: 1.4.4
       - name: Install dependencies
         run: bun install --frozen-lockfile
       - name: Prepare engine and browser before billing
