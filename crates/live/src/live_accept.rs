@@ -675,6 +675,7 @@ fn build_carbonize_replacement(
     indent: &str,
     cs: (&str, &str),
     is_jsx: bool,
+    style_tag: &str,
     id: &str,
     variant_num: &str,
     css: Option<&[String]>,
@@ -699,9 +700,9 @@ fn build_carbonize_replacement(
             body_indent, co, id, cc
         ));
         lines.push(format!(
-            "{}<style data-impeccable-css=\"{}\">{}",
+            "{}{}{}",
             body_indent,
-            id,
+            style_tag.replace("SESSION_ID", id),
             if is_jsx { "{`" } else { "" }
         ));
         for css_line in css {
@@ -828,6 +829,7 @@ fn handle_accept_unlocked(
         &indent,
         cs,
         is_jsx,
+        crate::wrap_common::detect_style_mode(target_file).1,
         id,
         variant_num,
         css_content.as_deref(),
@@ -1303,6 +1305,77 @@ mod discard_tests {
             out,
             "      </div>\n      <Bar title=\"Log in\" />\n    </AuthPage>"
         );
+    }
+}
+
+#[cfg(test)]
+mod carbonize_style_tests {
+    use super::*;
+
+    #[test]
+    fn accept_preserves_framework_style_tags() {
+        const SESSION: &str = "ab12cd34";
+        for (extension, is_astro, is_jsx) in [
+            ("astro", true, false),
+            ("Astro", true, false),
+            ("html", false, false),
+            ("jsx", false, true),
+        ] {
+            let nanos = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let dir = std::env::temp_dir().join(format!(
+                "impeccable-carbonize-style-{}-{nanos}",
+                std::process::id()
+            ));
+            std::fs::create_dir_all(&dir).unwrap();
+            let file = dir.join(format!("Page.{extension}"));
+            let (co, cc) = if is_jsx {
+                ("{/*", "*/}")
+            } else {
+                ("<!--", "-->")
+            };
+            let style_tag = format!(
+                "<style{} data-impeccable-css=\"{SESSION}\">",
+                if is_astro { " is:inline" } else { "" }
+            );
+            let (css_open, css_close) = if is_jsx { ("{`", "`}") } else { ("", "") };
+            let own_style =
+                format!("<style>{css_open}.original {{ color: black; }}{css_close}</style>");
+            let class_attr = if is_jsx { "className" } else { "class" };
+            let source = format!(
+                "<main>\n<div data-impeccable-variants=\"{SESSION}\" data-impeccable-variant-count=\"1\">\n{co} impeccable-variants-start {SESSION} {cc}\n{co} Original {cc}\n<div data-impeccable-variant=\"original\">\n<h1 {class_attr}=\"hero-title\">Original</h1>\n</div>\n{co} Variants: insert below this line {cc}\n{style_tag}{css_open}\n[data-impeccable-variant=\"1\"] > .hero-title {{ color: red; }}\n{css_close}</style>\n<div data-impeccable-variant=\"1\">\n<h1 {class_attr}=\"hero-title\">Accepted</h1>\n</div>\n{co} impeccable-variants-end {SESSION} {cc}\n</div>\n{own_style}\n</main>"
+            );
+            std::fs::write(&file, &source).unwrap();
+            let lines: Vec<String> = source.split('\n').map(String::from).collect();
+            let outcome =
+                handle_accept_unlocked(SESSION, "1", &lines, &file.to_string_lossy(), None, None);
+            let output = std::fs::read_to_string(&file).unwrap();
+            let _ = std::fs::remove_dir_all(&dir);
+
+            assert!(matches!(
+                outcome,
+                Ok(AcceptOutcome::Carbonized {
+                    carbonize: true,
+                    ..
+                })
+            ));
+            assert!(output.contains(&style_tag), "{extension}: {output}");
+            assert!(
+                output.contains(&own_style),
+                "original stylesheet changed: {output}"
+            );
+            assert!(output.contains(".hero-title { color: red; }"), "{output}");
+            assert!(output.contains(">Accepted</h1>"), "{output}");
+            assert!(!output.contains(">Original</h1>"), "{output}");
+            if is_jsx {
+                assert!(output.contains(&format!("{style_tag}{{`")), "{output}");
+                assert!(output.contains("`}</style>"), "{output}");
+            } else {
+                assert!(!output.contains("{`"), "{output}");
+            }
+        }
     }
 }
 
