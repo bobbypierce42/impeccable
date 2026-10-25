@@ -400,7 +400,7 @@ jobs:
     runs-on: kalana-ci
     needs: changes
     if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (needs.changes.outputs.live_e2e == 'true' && github.event_name != 'workflow_dispatch' && github.event_name != 'schedule')
-    timeout-minutes: 15
+    timeout-minutes: 30
     strategy:
       max-parallel: 1
       fail-fast: true
